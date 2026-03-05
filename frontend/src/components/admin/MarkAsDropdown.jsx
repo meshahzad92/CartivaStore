@@ -29,23 +29,25 @@ export default function MarkAsDropdown({ currentStatus, onSelect, loading }) {
             <button
                 onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
                 disabled={loading}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                style={{ background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}
             >
                 {loading ? (
                     <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                ) : (
-                    <span>Mark As</span>
-                )}
+                ) : (<span>Mark As</span>)}
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
 
             {open && (
-                <div className="absolute right-0 mt-1.5 w-36 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden">
+                <div
+                    className="absolute right-0 mt-1.5 w-36 rounded-xl py-1 overflow-hidden z-50"
+                    style={{ background: 'white', border: '1px solid #E5E7EB', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
+                >
                     {STATUS_OPTIONS.map((opt) => (
                         <button
                             key={opt.value}

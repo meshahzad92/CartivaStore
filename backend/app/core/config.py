@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 1440  # 24 hours
 
+    # PostEx courier API
+    POSTEX_API_KEY: str = ""
+    POSTEX_BASE_URL: str = "https://api.postex.pk/services/integration/api/order/v3"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

@@ -6,7 +6,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 # Allowed status values
-OrderStatus = Literal["pending", "confirmed", "on_hold", "fulfilled", "cancelled"]
+OrderStatus = Literal["pending", "confirmed", "on_hold", "fulfilled", "cancelled", "booked"]
 
 
 # ── Request schemas ──────────────────────────────────────────────────────────
@@ -42,8 +42,19 @@ class OrderItemOut(BaseModel):
 
     id: int
     product_id: int
+    product_name: Optional[str] = None
     quantity: int
     price: float
+
+    @classmethod
+    def from_orm_item(cls, item) -> "OrderItemOut":
+        return cls(
+            id=item.id,
+            product_id=item.product_id,
+            product_name=item.product.name if item.product else None,
+            quantity=item.quantity,
+            price=item.price,
+        )
 
 
 class OrderOut(BaseModel):
@@ -58,6 +69,8 @@ class OrderOut(BaseModel):
     status: str
     total_amount: float
     notes: Optional[str] = None
+    tracking_number: Optional[str] = None
+    postex_uploaded_at: Optional[datetime] = None
     created_at: datetime
     items: list[OrderItemOut] = []
 
@@ -87,3 +100,34 @@ class DashboardStats(BaseModel):
     fulfilled: int
     cancelled: int
     latest_order_id: Optional[int] = None
+
+
+class WeeklyDayCount(BaseModel):
+    date: str        # e.g. "Mon 03"
+    count: int
+
+
+class WeeklyStatsOut(BaseModel):
+    days: List[WeeklyDayCount]
+    total: int
+    average: float
+    peak_day: str
+    peak_count: int
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+
+
+class BulkDeleteResult(BaseModel):
+    deleted: int
+
+
+class BulkStatusUpdateRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+    status: OrderStatus
+
+
+class BulkStatusUpdateResult(BaseModel):
+    updated: int
+

@@ -22,6 +22,8 @@ class Order(Base):
     status = Column(String(20), nullable=False, default="pending", index=True)
     total_amount = Column(Float, nullable=False, default=0.0)
     notes = Column(Text, nullable=True, default=None)
+    tracking_number = Column(String(100), nullable=True, default=None, index=True)
+    postex_uploaded_at = Column(DateTime(timezone=True), nullable=True, default=None)
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),

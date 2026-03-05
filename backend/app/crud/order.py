@@ -179,3 +179,64 @@ def get_dashboard_stats(db: Session) -> dict:
         "cancelled": counts.get("cancelled", 0),
         "latest_order_id": latest,
     }
+
+
+def delete_orders(db: Session, order_ids: list[int]) -> int:
+    """Bulk delete orders by ID list. Returns number of deleted rows."""
+    if not order_ids:
+        return 0
+    deleted = (
+        db.query(Order)
+        .filter(Order.id.in_(order_ids))
+        .delete(synchronize_session="fetch")
+    )
+    db.commit()
+    return deleted
+
+
+def get_weekly_order_counts(db: Session) -> dict:
+    """Return per-day order counts for the last 7 days (including today)."""
+    from datetime import timedelta
+
+    today = date.today()
+    days = [today - timedelta(days=i) for i in range(6, -1, -1)]  # oldest → newest
+
+    # Fetch counts grouped by date
+    rows = (
+        db.query(func.date(Order.created_at).label("day"), func.count(Order.id).label("cnt"))
+        .filter(func.date(Order.created_at) >= days[0])
+        .group_by(func.date(Order.created_at))
+        .all()
+    )
+    count_map = {str(r.day): r.cnt for r in rows}
+
+    result = []
+    for d in days:
+        label = d.strftime("%a %d")   # e.g. "Mon 03"
+        result.append({"date": label, "count": count_map.get(str(d), 0)})
+
+    total = sum(r["count"] for r in result)
+    avg = round(total / 7, 1)
+    peak = max(result, key=lambda r: r["count"]) if result else {"date": "—", "count": 0}
+
+    return {
+        "days": result,
+        "total": total,
+        "average": avg,
+        "peak_day": peak["date"],
+        "peak_count": peak["count"],
+    }
+
+
+def bulk_update_orders_status(db: Session, order_ids: list[int], new_status: str) -> int:
+    """Set the same status on multiple orders at once. Returns count updated."""
+    if not order_ids:
+        return 0
+    updated = (
+        db.query(Order)
+        .filter(Order.id.in_(order_ids))
+        .update({"status": new_status}, synchronize_session="fetch")
+    )
+    db.commit()
+    return updated
+

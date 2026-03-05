@@ -4,8 +4,6 @@ import StatusBadge from './StatusBadge';
 import MarkAsDropdown from './MarkAsDropdown';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-
-// Format currency
 const fmt = (n) => `Rs ${Math.round(n || 0).toLocaleString()}`;
 
 export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrderUpdate, authFetch }) {
@@ -14,16 +12,19 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
     const [saving, setSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState('');
     const [statusLoading, setStatusLoading] = useState(false);
+    // Item-level editing (visual only — recalculates display total)
+    const [editedItems, setEditedItems] = useState([]);
+    const [itemEditMode, setItemEditMode] = useState(false);
     const firstInputRef = useRef(null);
 
-    // Sync fields when order changes
     useEffect(() => {
         setAddress(order?.address ?? '');
         setNotes(order?.notes ?? '');
         setSaveMsg('');
+        setItemEditMode(false);
+        setEditedItems(order?.items?.map(i => ({ ...i })) ?? []);
     }, [order?.id]);
 
-    // Focus trap close on Escape
     useEffect(() => {
         const handler = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', handler);
@@ -32,7 +33,13 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
 
     if (!order) return null;
 
-    const subtotal = order.items?.reduce((sum, item) => sum + item.price * item.quantity, 0) ?? order.total_amount;
+    const displayItems = itemEditMode ? editedItems : (order.items ?? []);
+    const displaySubtotal = displayItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    const handleItemChange = (index, field, raw) => {
+        const val = field === 'price' ? parseFloat(raw) || 0 : parseInt(raw, 10) || 1;
+        setEditedItems(prev => prev.map((it, i) => i === index ? { ...it, [field]: val } : it));
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -46,7 +53,7 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
             const updated = await res.json();
             setSaveMsg('Saved');
             if (onOrderUpdate) onOrderUpdate(updated);
-            setTimeout(() => setSaveMsg(''), 2000);
+            setTimeout(() => setSaveMsg(''), 2500);
         } catch {
             setSaveMsg('Error saving');
         } finally {
@@ -62,11 +69,9 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
 
     return createPortal(
         <div className="fixed inset-0 z-50 flex">
-            {/* Backdrop */}
             <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
 
-            {/* Panel */}
-            <div className="relative ml-auto h-full w-full max-w-[520px] bg-white shadow-2xl flex flex-col order-panel-slide-in">
+            <div className="relative ml-auto h-full w-full max-w-[540px] bg-white shadow-2xl flex flex-col order-panel-slide-in">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                     <div className="flex items-center gap-3">
@@ -92,8 +97,6 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
 
                 {/* Scrollable body */}
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-
-                    {/* Order date */}
                     <p className="text-xs text-gray-400">
                         Placed on{' '}
                         {new Date(order.created_at).toLocaleString('en-PK', {
@@ -102,21 +105,67 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
                         })}
                     </p>
 
-                    {/* Products */}
+                    {/* Items */}
                     <section>
-                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Items</h3>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                                Items
+                            </h3>
+                            <button
+                                onClick={() => setItemEditMode(m => !m)}
+                                className="text-[11px] font-medium text-indigo-500 hover:text-indigo-700 transition-colors cursor-pointer"
+                            >
+                                {itemEditMode ? 'Done Editing' : 'Edit Items'}
+                            </button>
+                        </div>
+
+                        {itemEditMode && (
+                            <p className="text-[11px] text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-3">
+                                Item changes are visual only — recalculates the total for reference but does not update the database.
+                            </p>
+                        )}
+
                         <div className="space-y-2">
-                            {order.items?.length > 0 ? order.items.map((item, i) => (
-                                <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-800">
-                                            {item.product?.name ?? `Product #${item.product_id}`}
+                            {displayItems.length > 0 ? displayItems.map((item, i) => (
+                                <div key={i} className="border border-gray-100 rounded-xl p-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <p className="text-sm font-semibold text-gray-800 flex-1">
+                                            {item.product_name ?? `Product #${item.product_id}`}
                                         </p>
-                                        <p className="text-xs text-gray-400">
+                                        <span className="text-sm font-bold text-gray-900 shrink-0">
+                                            {fmt(item.price * item.quantity)}
+                                        </span>
+                                    </div>
+
+                                    {itemEditMode ? (
+                                        <div className="flex items-center gap-3 mt-2">
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-gray-400 block mb-0.5">Qty</label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={item.quantity}
+                                                    onChange={(e) => handleItemChange(i, 'quantity', e.target.value)}
+                                                    className="w-full text-sm px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800"
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-gray-400 block mb-0.5">Unit Price (Rs)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={item.price}
+                                                    onChange={(e) => handleItemChange(i, 'price', e.target.value)}
+                                                    className="w-full text-sm px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800"
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-400 mt-1">
                                             {item.quantity} × {fmt(item.price)}
                                         </p>
-                                    </div>
-                                    <span className="text-sm font-semibold text-gray-900">{fmt(item.price * item.quantity)}</span>
+                                    )}
                                 </div>
                             )) : (
                                 <p className="text-sm text-gray-400">No items data available</p>
@@ -126,13 +175,14 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
                         {/* Totals */}
                         <div className="mt-4 space-y-1.5 text-sm">
                             <div className="flex justify-between text-gray-500">
-                                <span>Subtotal</span><span>{fmt(subtotal)}</span>
+                                <span>Subtotal</span><span>{fmt(displaySubtotal)}</span>
                             </div>
                             <div className="flex justify-between text-gray-500">
                                 <span>Shipping</span><span className="text-emerald-600">Free</span>
                             </div>
                             <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100">
-                                <span>Total</span><span>{fmt(order.total_amount)}</span>
+                                <span>Total</span>
+                                <span>{fmt(itemEditMode ? displaySubtotal : order.total_amount)}</span>
                             </div>
                         </div>
                     </section>
@@ -176,7 +226,7 @@ export default function OrderDetailPanel({ order, onClose, onStatusChange, onOrd
                     </section>
                 </div>
 
-                {/* Footer / Save */}
+                {/* Footer */}
                 <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
                     {saveMsg ? (
                         <span className={`text-xs font-medium ${saveMsg === 'Saved' ? 'text-emerald-600' : 'text-red-500'}`}>

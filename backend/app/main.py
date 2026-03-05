@@ -5,6 +5,7 @@ Production-ready e-commerce backend.
 """
 
 import os
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -18,14 +19,23 @@ from app.db.session import engine
 
 # Import all models so Base.metadata knows about them
 from app.models import product, order, testimonial  # noqa: F401
+from app.models import settings as settings_model     # noqa: F401
 
 # Import routers
 from app.api.routes.product import router as product_router
 from app.api.routes.order import router as order_router
 from app.api.routes.testimonial import router as testimonial_router
 from app.api.routes.admin import router as admin_router
+from app.api.routes.postex import router as postex_router
+from app.api.routes.settings import router as settings_router
 
 settings = get_settings()
+
+# ── Logging config ────────────────────────────────────────────────────────────
+# Silence SQLAlchemy engine logs — only show warnings and above
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.dialects").setLevel(logging.WARNING)
 
 
 # ── Lifespan ─────────────────────────────────────────────────────────────────
@@ -34,6 +44,14 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Create tables on startup (dev convenience). Alembic handles prod."""
     Base.metadata.create_all(bind=engine)
+    # ── SQLite safe migrations: add new columns if they don't exist ──
+    with engine.connect() as conn:
+        existing = [row[1] for row in conn.execute(__import__('sqlalchemy').text("PRAGMA table_info(orders)"))]
+        if "tracking_number" not in existing:
+            conn.execute(__import__('sqlalchemy').text("ALTER TABLE orders ADD COLUMN tracking_number VARCHAR(100) DEFAULT NULL"))
+        if "postex_uploaded_at" not in existing:
+            conn.execute(__import__('sqlalchemy').text("ALTER TABLE orders ADD COLUMN postex_uploaded_at DATETIME DEFAULT NULL"))
+        conn.commit()
     yield
 
 
@@ -88,6 +106,8 @@ app.include_router(product_router, prefix="/api/v1")
 app.include_router(order_router, prefix="/api/v1")
 app.include_router(testimonial_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(postex_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
 
 
 # ── Health check ─────────────────────────────────────────────────────────────

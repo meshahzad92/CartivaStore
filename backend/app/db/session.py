@@ -16,7 +16,7 @@ engine = create_engine(
     settings.DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True,
-    echo=settings.DEBUG,
+    echo=False,  # never echo SQL — use a DB profiler if needed
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

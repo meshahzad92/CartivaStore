@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, memo, useRef } from 'react';
-import { Truck, Upload, RefreshCw, CheckCircle, XCircle, Edit2, Save, X } from 'lucide-react';
+import { Truck, Upload, RefreshCw, CheckCircle, XCircle, Edit2, Save, X, Eye } from 'lucide-react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 
@@ -95,8 +95,12 @@ function AdminPostex() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Per-row edited data: { [orderId]: { orderDetail, customerName, customerPhone, deliveryAddress, cityName, invoicePayment, items } }
+    // Per-row edited data: { [orderId]: { orderDetail, customerName, customerPhone, deliveryAddress, cityName, invoicePayment, items, weight, pickupAddressCode, storeAddressCode } }
     const [edits, setEdits] = useState({});
+
+    // Modal Edit State
+    const [editingOrder, setEditingOrder] = useState(null); // stores the order ID being edited in the modal
+    const [modalData, setModalData] = useState({}); // local state for the modal form
 
     // Selection
     const [selectedIds, setSelectedIds] = useState(new Set());
@@ -110,11 +114,24 @@ function AdminPostex() {
     const fetchOrders = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await authFetch(`${API_BASE}/admin/postex/orders`);
-            if (!res.ok) throw new Error();
-            const data = await res.json();
+            const [ordersRes, settingsRes] = await Promise.all([
+                authFetch(`${API_BASE}/admin/postex/orders`),
+                authFetch(`${API_BASE}/admin/settings`)
+            ]);
+            if (!ordersRes.ok || !settingsRes.ok) throw new Error();
+
+            const [data, settings] = await Promise.all([
+                ordersRes.json(),
+                settingsRes.json()
+            ]);
+
             const list = data.orders ?? [];
             setOrders(list);
+
+            const defWeight = settings.default_weight ?? 0.5;
+            const defPickup = settings.pickup_address_code || '';
+            const defStore = settings.store_address_code || '';
+
             // Seed edits with current values
             const initial = {};
             list.forEach(o => {
@@ -127,6 +144,9 @@ function AdminPostex() {
                     deliveryAddress: o.address,
                     cityName: o.city,
                     items: String(o.item_count ?? (o.items?.length ?? 1)),
+                    weight: String(defWeight),
+                    pickupAddressCode: defPickup,
+                    storeAddressCode: defStore,
                 };
             });
             setEdits(initial);
@@ -144,6 +164,20 @@ function AdminPostex() {
             ...prev,
             [orderId]: { ...prev[orderId], [field]: value },
         }));
+    };
+
+    const openModal = (orderId) => {
+        setEditingOrder(orderId);
+        setModalData({ ...(edits[orderId] || {}) });
+    };
+
+    const saveModal = () => {
+        if (!editingOrder) return;
+        setEdits(prev => ({
+            ...prev,
+            [editingOrder]: { ...modalData }
+        }));
+        setEditingOrder(null);
     };
 
     // ── Selection ────────────────────────────────────────────────────────────
@@ -180,6 +214,9 @@ function AdminPostex() {
                         city: e.cityName || o.city,
                         notes: e.orderDetail || o.notes,
                         items: Array(parseInt(e.items, 10) || 1).fill(null), // length only
+                        weight: e.weight ? parseFloat(e.weight) : undefined,
+                        pickupAddressCode: e.pickupAddressCode || undefined,
+                        storeAddressCode: e.storeAddressCode || undefined,
                     };
                 });
 
@@ -259,16 +296,6 @@ function AdminPostex() {
                 </div>
             </div>
 
-            {/* Hint banner */}
-            <div
-                className="flex items-start gap-3 rounded-xl px-4 py-3 mb-5 text-xs"
-                style={{ background: '#FFF7ED', border: '1px solid #FDE68A', color: '#92400E' }}
-            >
-                <Edit2 size={13} className="shrink-0 mt-0.5" />
-                <span>
-                    All fields are <strong>editable</strong> — change the invoice amount, address, city or any detail before uploading. Only <strong>confirmed</strong> orders that haven't been uploaded yet are shown here.
-                </span>
-            </div>
 
             {/* Table */}
             <div
@@ -310,6 +337,9 @@ function AdminPostex() {
                                             {f.label}
                                         </th>
                                     ))}
+                                    <th className="py-3 pr-3 text-center text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ background: '#FAFAFA', color: '#94A3B8' }}>
+                                        Details
+                                    </th>
                                     <th className="py-3 pr-5 text-center text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ background: '#FAFAFA', color: '#94A3B8' }}>
                                         Date
                                     </th>
@@ -413,6 +443,17 @@ function AdminPostex() {
                                                 />
                                             </td>
 
+                                            {/* Details Button */}
+                                            <td className="py-3 pr-3 text-center text-[10px] whitespace-nowrap">
+                                                <button
+                                                    onClick={() => openModal(order.id)}
+                                                    className="p-1.5 rounded-lg text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-colors inline-flex align-middle"
+                                                    title="View full details"
+                                                >
+                                                    <Eye size={16} />
+                                                </button>
+                                            </td>
+
                                             {/* Date */}
                                             <td className="py-3 pr-5 text-center whitespace-nowrap">
                                                 <span className="text-[11px]" style={{ color: '#94A3B8' }}>
@@ -443,6 +484,86 @@ function AdminPostex() {
                     </div>
                 )}
             </div>
+
+            {/* Expanded Item Details Modal */}
+            {editingOrder && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">Order Details</h3>
+                                <p className="text-xs text-gray-500 mt-0.5">Edit payload parameters for PostEx upload (Order #{editingOrder})</p>
+                            </div>
+                            <button onClick={() => setEditingOrder(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto space-y-5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Order Ref Number</label>
+                                    <input type="text" value={modalData.orderRefNumber || ''} onChange={e => setModalData(p => ({ ...p, orderRefNumber: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Invoice Amount (COD)</label>
+                                    <input type="number" value={modalData.invoicePayment || ''} onChange={e => setModalData(p => ({ ...p, invoicePayment: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Customer Name</label>
+                                    <input type="text" value={modalData.customerName || ''} onChange={e => setModalData(p => ({ ...p, customerName: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Customer Phone</label>
+                                    <input type="text" value={modalData.customerPhone || ''} onChange={e => setModalData(p => ({ ...p, customerPhone: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Delivery Address</label>
+                                    <input type="text" value={modalData.deliveryAddress || ''} onChange={e => setModalData(p => ({ ...p, deliveryAddress: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">City</label>
+                                    <input type="text" value={modalData.cityName || ''} onChange={e => setModalData(p => ({ ...p, cityName: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Items Quantity</label>
+                                    <input type="number" value={modalData.items || ''} onChange={e => setModalData(p => ({ ...p, items: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Order Details (Notes)</label>
+                                    <input type="text" value={modalData.orderDetail || ''} onChange={e => setModalData(p => ({ ...p, orderDetail: e.target.value }))} className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors" />
+                                </div>
+                            </div>
+
+                            {/* Optional/System fields */}
+                            <div className="pt-4 border-t border-gray-100">
+                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">System Overrides (Optional)</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">Weight (kg)</label>
+                                        <input type="number" step="0.1" value={modalData.weight || ''} onChange={e => setModalData(p => ({ ...p, weight: e.target.value }))} placeholder="Settings Default" className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-colors bg-gray-50" />
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-2">
+                                    This value is pre-filled from your global Settings. You can override the default weight here for this specific order.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+                            <button onClick={() => setEditingOrder(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors cursor-pointer">
+                                Cancel
+                            </button>
+                            <button onClick={saveModal} className="px-5 py-2 text-sm font-bold text-white rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/30 flex items-center gap-2 cursor-pointer">
+                                <Save size={16} /> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AdminLayout>
     );
 }

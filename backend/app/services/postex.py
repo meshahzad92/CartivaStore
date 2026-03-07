@@ -29,7 +29,8 @@ def create_postex_order(order: dict, token_override: str | None = None) -> dict[
     Send a single order to the PostEx API.
 
     Expected order dict fields:
-      id, total_amount, full_name, phone, address, city, notes, items (list)
+      id, total_amount, full_name, phone, address, city, notes, items (list),
+      pickup_address_code (str | None) — PostEx addressCode from merchant settings
 
     Returns the raw PostEx JSON response.
     Raises requests.RequestException on network failure.
@@ -47,7 +48,16 @@ def create_postex_order(order: dict, token_override: str | None = None) -> dict[
         "invoiceDivision": 1,
         "items": item_count,
         "orderType": "Normal",
+        "weight": order.get("weight", 0.5),
     }
+
+    # Include address codes — PostEx requires at least one of pickupAddressCode or storeAddressCode
+    pickup_code = order.get("pickup_address_code")
+    store_code = order.get("store_address_code")
+    if pickup_code:
+        payload["pickupAddressCode"] = pickup_code
+    if store_code:
+        payload["storeAddressCode"] = store_code
 
     url = f"{_base()}/create-order"
     try:

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ── Shared sub-schemas ───────────────────────────────────────────────────────
@@ -25,6 +25,14 @@ class AddOnOption(BaseModel):
 class ProductCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    status: str = Field("draft", description="active, unlisted, or draft")
+    weight_kg: float = Field(0.0, ge=0)
+    vendor: Optional[str] = None
+    product_type: Optional[str] = None
+    organization: Optional[str] = None
+    seo_title: Optional[str] = None
+    seo_desc: Optional[str] = None
+    tags: list[str] = Field(default_factory=list)
     price: float = Field(..., gt=0, description="Must be a positive number")
     original_price: Optional[float] = Field(None, ge=0)
     category: str = Field(..., min_length=1, max_length=100)
@@ -42,6 +50,14 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    status: Optional[str] = Field(None, description="active, unlisted, or draft")
+    weight_kg: Optional[float] = Field(None, ge=0)
+    vendor: Optional[str] = None
+    product_type: Optional[str] = None
+    organization: Optional[str] = None
+    seo_title: Optional[str] = None
+    seo_desc: Optional[str] = None
+    tags: Optional[list[str]] = None
     price: Optional[float] = Field(None, gt=0)
     original_price: Optional[float] = Field(None, ge=0)
     category: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -64,6 +80,14 @@ class ProductOut(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    status: str
+    weight_kg: float
+    vendor: Optional[str] = None
+    product_type: Optional[str] = None
+    organization: Optional[str] = None
+    seo_title: Optional[str] = None
+    seo_desc: Optional[str] = None
+    tags: list[str] = []
     price: float
     original_price: Optional[float] = None
     category: str
@@ -77,6 +101,13 @@ class ProductOut(BaseModel):
     packages: list[dict] = []
     add_on: Optional[dict] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+
+    @field_validator('tags', 'images', 'packages', mode='before')
+    @classmethod
+    def ensure_list(cls, v):
+        return v if v is not None else []
 
 
 class ProductListOut(BaseModel):

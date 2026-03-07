@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 
-export default function ConfirmDeleteModal({ count, onConfirm, onCancel, loading }) {
+export default function ConfirmDeleteModal({ count, onConfirm, onCancel, loading, itemName = 'Order' }) {
     return createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             {/* Backdrop */}
@@ -23,10 +23,10 @@ export default function ConfirmDeleteModal({ count, onConfirm, onCancel, loading
                     </div>
 
                     <h2 className="text-[15px] font-bold text-gray-900 mb-1">
-                        Delete {count} {count === 1 ? 'Order' : 'Orders'}?
+                        Delete {count} {count === 1 ? itemName : itemName + 's'}?
                     </h2>
                     <p className="text-sm text-gray-400 leading-relaxed">
-                        This action cannot be undone. The selected {count === 1 ? 'order' : 'orders'} and all associated items will be permanently removed.
+                        This action cannot be undone. The selected {count === 1 ? itemName.toLowerCase() : itemName.toLowerCase() + 's'} and all associated items will be permanently removed.
                     </p>
 
                     <div className="flex items-center gap-2 mt-6">
@@ -48,7 +48,7 @@ export default function ConfirmDeleteModal({ count, onConfirm, onCancel, loading
                                     Deleting…
                                 </>
                             ) : (
-                                `Delete ${count === 1 ? 'Order' : 'Orders'}`
+                                `Delete ${count === 1 ? itemName : itemName + 's'}`
                             )}
                         </button>
                     </div>

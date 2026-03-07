@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import {
     LayoutDashboard, ClipboardList, Truck, LogOut, Menu, X,
-    Bell, Search, ChevronRight, Settings,
+    Bell, Search, ChevronRight, Settings, Package,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -16,6 +16,11 @@ const NAV_ITEMS = [
         to: '/admin/orders',
         label: 'Orders',
         icon: ClipboardList,
+    },
+    {
+        to: '/admin/products',
+        label: 'Products',
+        icon: Package,
     },
     {
         to: '/admin/postex',

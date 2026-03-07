@@ -57,7 +57,14 @@ export function AdminAuthProvider({ children }) {
 
     const authFetch = useCallback(
         (url, options = {}) => {
-            return fetch(url, {
+            let fetchUrl = url;
+            if (url.startsWith('/api/v1')) {
+                fetchUrl = `${API_BASE}${url.replace('/api/v1', '')}`;
+            } else if (url.startsWith('/api')) {
+                fetchUrl = `${API_BASE}${url.replace('/api', '')}`;
+            }
+
+            return fetch(fetchUrl, {
                 ...options,
                 headers: {
                     'Content-Type': 'application/json',

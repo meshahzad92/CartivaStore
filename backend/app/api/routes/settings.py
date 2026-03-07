@@ -30,6 +30,9 @@ class SettingsOut(BaseModel):
     token: Optional[str] = None
     pickup_address: Optional[str] = None
     return_address: Optional[str] = None
+    pickup_address_code: Optional[str] = None
+    pickup_address_label: Optional[str] = None
+    store_address_code: Optional[str] = None
     default_weight: Optional[float] = 0.5
     shipper_remarks: Optional[str] = None
     shipper_type: str = "Normal"
@@ -51,6 +54,9 @@ class SettingsIn(BaseModel):
     token: Optional[str] = None
     pickup_address: Optional[str] = None
     return_address: Optional[str] = None
+    pickup_address_code: Optional[str] = None
+    pickup_address_label: Optional[str] = None
+    store_address_code: Optional[str] = None
     default_weight: Optional[float] = None
     shipper_remarks: Optional[str] = None
     shipper_type: Optional[str] = None

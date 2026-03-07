@@ -23,8 +23,9 @@ def save_settings(db: Session, data: dict) -> PostexSettings:
         db.add(row)
 
     allowed = {
-        "token", "pickup_address", "return_address", "default_weight",
-        "shipper_remarks", "shipper_type", "shipper_handling",
+        "token", "pickup_address", "return_address",
+        "pickup_address_code", "pickup_address_label", "store_address_code",
+        "default_weight", "shipper_remarks", "shipper_type", "shipper_handling",
         "print_item_details", "print_item_details_sku",
         "auto_order_fulfillment", "auto_save_tracking",
         "auto_calculate_weight", "auto_calculate_pieces",

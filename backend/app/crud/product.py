@@ -12,8 +12,12 @@ from app.schemas.product import ProductCreate, ProductUpdate
 
 
 def get_product(db: Session, product_id: int) -> Optional[Product]:
-    """Get a single product by ID."""
-    return db.query(Product).filter(Product.id == product_id).first()
+    """Get a single product by ID (storefront view - only active)."""
+    return db.query(Product).filter(
+        Product.id == product_id,
+        Product.deleted_at == None,
+        Product.status == "active"
+    ).first()
 
 
 def get_products(
@@ -31,7 +35,10 @@ def get_products(
     List products with filtering, searching, sorting, and pagination.
     Returns dict with items, total, page info.
     """
-    query = db.query(Product)
+    query = db.query(Product).filter(
+        Product.deleted_at == None,
+        Product.status == "active"
+    )
 
     # ── Filters ──────────────────────────────────────────────────────────
     if search:

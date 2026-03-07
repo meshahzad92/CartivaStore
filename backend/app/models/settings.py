@@ -13,8 +13,13 @@ class PostexSettings(Base):
     token = Column(String(512), nullable=True, default=None)
 
     # Addresses
-    pickup_address = Column(Text, nullable=True, default=None)
+    pickup_address = Column(Text, nullable=True, default=None)       # legacy free-text field
     return_address = Column(Text, nullable=True, default=None)
+
+    # Pickup location from PostEx merchant-address API
+    pickup_address_code = Column(String(100), nullable=True, default=None)   # PostEx pickupAddressCode
+    pickup_address_label = Column(String(255), nullable=True, default=None)  # Display: "Lahore — Warehouse DHA"
+    store_address_code = Column(String(100), nullable=True, default=None)    # PostEx storeAddressCode (alternative to pickup)
 
     # Shipment defaults
     default_weight = Column(Float, nullable=True, default=0.5)

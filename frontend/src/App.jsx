@@ -20,6 +20,8 @@ const Contact = lazy(() => import('./pages/Contact'));
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
+const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'));
+const AdminProductForm = lazy(() => import('./pages/admin/AdminProductForm'));
 const AdminPostex = lazy(() => import('./pages/admin/AdminPostex'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
 
@@ -44,6 +46,36 @@ export default function App() {
             <AdminProtectedRoute>
               <Suspense fallback={<Loader size="lg" />}>
                 <AdminOrders />
+              </Suspense>
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/products"
+          element={
+            <AdminProtectedRoute>
+              <Suspense fallback={<Loader size="lg" />}>
+                <AdminProducts />
+              </Suspense>
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/products/new"
+          element={
+            <AdminProtectedRoute>
+              <Suspense fallback={<Loader size="lg" />}>
+                <AdminProductForm />
+              </Suspense>
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/products/:id"
+          element={
+            <AdminProtectedRoute>
+              <Suspense fallback={<Loader size="lg" />}>
+                <AdminProductForm />
               </Suspense>
             </AdminProtectedRoute>
           }

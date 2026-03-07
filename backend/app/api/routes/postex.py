@@ -61,7 +61,88 @@ class PostexTrackResponse(BaseModel):
     data: dict
 
 
+class PickupLocationsRequest(BaseModel):
+    token: str
+
+
+class PickupLocation(BaseModel):
+    addressCode: str
+    cityName: str
+    address: str
+
+
+class PickupLocationsResponse(BaseModel):
+    locations: List[PickupLocation]
+
+
 # ── Endpoints ────────────────────────────────────────────────────────────────
+
+
+@router.post("/pickup-locations", response_model=PickupLocationsResponse)
+def get_pickup_locations(
+    body: PickupLocationsRequest,
+    admin: str = Depends(get_current_admin),
+):
+    """
+    Fetch merchant pickup addresses from PostEx using the provided API token.
+    The token is used for this request only — it is NOT saved by this endpoint.
+    The admin must click Save Settings separately to persist the token.
+    """
+    postex_url = "https://api.postex.pk/services/integration/api/order/v1/get-merchant-address"
+    try:
+        resp = requests.get(
+            postex_url,
+            headers={"token": body.token.strip(), "Content-Type": "application/json"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.Timeout:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="PostEx API timed out. Please try again.",
+        )
+    except requests.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"PostEx API returned an error: {exc.response.status_code}",
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Network error contacting PostEx: {exc}",
+        )
+
+    dist = data.get("dist") or []
+    if not dist:
+        status_code_val = str(data.get("statusCode", ""))
+        if status_code_val in ("401", "403"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid PostEx API token. Please check your token and try again.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No pickup addresses found for this account. Please add pickup addresses in your PostEx merchant portal.",
+        )
+
+    locations = [
+        PickupLocation(
+            addressCode=loc.get("addressCode", ""),
+            cityName=loc.get("cityName", ""),
+            address=loc.get("address", ""),
+        )
+        for loc in dist
+        if loc.get("addressCode")
+    ]
+
+    if not locations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No valid pickup addresses returned by PostEx.",
+        )
+
+    return PickupLocationsResponse(locations=locations)
 
 @router.post("/upload", response_model=PostexUploadResponse)
 def upload_to_postex(
@@ -85,6 +166,19 @@ def upload_to_postex(
     token_override = db_settings.token or None  # None → service uses .env
     default_weight = db_settings.default_weight or 0.5
     shipper_type = db_settings.shipper_type or "Normal"
+    pickup_address_code = db_settings.pickup_address_code or None
+    store_address_code = db_settings.store_address_code or None
+
+    # Guard: PostEx requires at least one address code
+    if not pickup_address_code and not store_address_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "No pickup or store address code configured. "
+                "Go to Settings → PostEx Courier → Connect & Fetch Pickup Locations "
+                "to select a pickup address, then save."
+            ),
+        )
 
     results: List[PostexOrderResult] = []
     uploaded = 0
@@ -115,6 +209,9 @@ def upload_to_postex(
             "city": ov.get("cityName") or order.city,
             "notes": ov.get("orderDetail") or order.notes,
             "items": list(range(items_count)),
+            "pickup_address_code": ov.get("pickupAddressCode") or pickup_address_code,
+            "store_address_code": ov.get("storeAddressCode") or store_address_code,
+            "weight": ov.get("weight") or default_weight,
         }
         try:
             resp = create_postex_order(order_dict, token_override=token_override)

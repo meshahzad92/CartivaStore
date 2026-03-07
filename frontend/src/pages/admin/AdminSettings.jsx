@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, memo } from 'react';
-import { Settings, Save, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Settings, Save, CheckCircle, AlertCircle, Eye, EyeOff, MapPin, RefreshCw } from 'lucide-react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 
@@ -102,6 +102,8 @@ const DEFAULT_FORM = {
     token: '',
     pickup_address: '',
     return_address: '',
+    pickup_address_code: '',
+    pickup_address_label: '',
     default_weight: '0.5',
     shipper_remarks: '',
     shipper_type: 'Normal',
@@ -125,6 +127,12 @@ function AdminSettings() {
     const [error, setError] = useState(null);
     const [showToken, setShowToken] = useState(false);
 
+    // Pickup location state
+    const [pickupLocations, setPickupLocations] = useState([]);
+    const [fetchingLocations, setFetchingLocations] = useState(false);
+    const [locationError, setLocationError] = useState(null);
+    const [locationsFetched, setLocationsFetched] = useState(false);
+
     const set = (field) => (val) => setForm(p => ({ ...p, [field]: val }));
 
     // Fetch current settings
@@ -139,11 +147,59 @@ function AdminSettings() {
                     ...data,
                     default_weight: String(data.default_weight ?? 0.5),
                     token: data.token ?? '',
+                    pickup_address_code: data.pickup_address_code ?? '',
+                    pickup_address_label: data.pickup_address_label ?? '',
                 }));
             } catch { /* use defaults */ }
             finally { setLoading(false); }
         })();
     }, [authFetch]);
+
+    // Fetch pickup locations from PostEx
+    const fetchPickupLocations = useCallback(async () => {
+        const tokenVal = form.token?.trim();
+        if (!tokenVal) return;
+        setFetchingLocations(true);
+        setLocationError(null);
+        setLocationsFetched(false);
+        try {
+            const res = await authFetch(`${API_BASE}/admin/postex/pickup-locations`, {
+                method: 'POST',
+                body: JSON.stringify({ token: tokenVal }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setLocationError(data.detail || 'Failed to fetch pickup locations.');
+                return;
+            }
+            setPickupLocations(data.locations || []);
+            setLocationsFetched(true);
+            // Auto-select first if nothing saved yet
+            if (!form.pickup_address_code && data.locations?.length > 0) {
+                const first = data.locations[0];
+                setForm(p => ({
+                    ...p,
+                    pickup_address_code: first.addressCode,
+                    pickup_address_label: `${first.cityName} — ${first.address}`,
+                }));
+            }
+        } catch {
+            setLocationError('Network error. Please check your connection and try again.');
+        } finally {
+            setFetchingLocations(false);
+        }
+    }, [authFetch, form.token, form.pickup_address_code]);
+
+    const handleSelectLocation = (addressCode) => {
+        const loc = pickupLocations.find(l => l.addressCode === addressCode);
+        if (loc) {
+            setForm(p => ({
+                ...p,
+                pickup_address_code: loc.addressCode,
+                pickup_address_label: `${loc.cityName} — ${loc.address}`,
+            }));
+        }
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -155,6 +211,8 @@ function AdminSettings() {
                 default_weight: parseFloat(form.default_weight) || 0.5,
                 // Don't send empty string for token — send null to keep existing
                 token: form.token.trim() || null,
+                pickup_address_code: form.pickup_address_code || null,
+                pickup_address_label: form.pickup_address_label || null,
             };
             const res = await authFetch(`${API_BASE}/admin/settings`, {
                 method: 'PUT',
@@ -235,12 +293,14 @@ function AdminSettings() {
                     {/* ── Left column: main config ── */}
                     <div className="space-y-5">
 
-                        {/* API Token */}
+                        {/* API Token + Pickup Location */}
                         <div
-                            className="bg-white rounded-2xl p-5"
+                            className="bg-white rounded-2xl p-5 space-y-4"
                             style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.07)', border: '1px solid #F1F5F9' }}
                         >
-                            <h2 className="text-base font-bold mb-4" style={{ color: '#1E293B' }}>PostEx Courier</h2>
+                            <h2 className="text-base font-bold" style={{ color: '#1E293B' }}>PostEx Courier</h2>
+
+                            {/* Token field */}
                             <Field label="API Token">
                                 <div className="relative">
                                     <input
@@ -261,22 +321,77 @@ function AdminSettings() {
                                     </button>
                                 </div>
                             </Field>
-                        </div>
 
-                        {/* Addresses */}
-                        <div
-                            className="bg-white rounded-2xl p-5 space-y-4"
-                            style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.07)', border: '1px solid #F1F5F9' }}
-                        >
-                            <h2 className="text-base font-bold" style={{ color: '#1E293B' }}>Addresses</h2>
-                            <Field label="Pickup Address">
-                                <Input
-                                    value={form.pickup_address}
-                                    onChange={set('pickup_address')}
-                                    placeholder="House no, street, area, city"
-                                    multiline
-                                />
-                            </Field>
+                            {/* Connect button */}
+                            <button
+                                type="button"
+                                onClick={fetchPickupLocations}
+                                disabled={!form.token?.trim() || fetchingLocations}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                style={{
+                                    background: (!form.token?.trim() || fetchingLocations) ? '#F1F5F9' : 'linear-gradient(135deg,#0EA5E9,#0284C7)',
+                                    color: (!form.token?.trim() || fetchingLocations) ? '#94A3B8' : '#fff',
+                                    border: '1.5px solid #E2E8F0',
+                                }}
+                            >
+                                {fetchingLocations ? (
+                                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                ) : (
+                                    <MapPin size={14} />
+                                )}
+                                {fetchingLocations ? 'Fetching Locations…' : 'Connect & Fetch Pickup Locations'}
+                            </button>
+
+                            {/* Location error */}
+                            {locationError && (
+                                <div className="flex items-start gap-2 rounded-xl px-3.5 py-3 text-xs font-medium"
+                                    style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
+                                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                                    {locationError}
+                                </div>
+                            )}
+
+                            {/* Pickup location dropdown — shown when fetched or when a saved code exists */}
+                            {(locationsFetched || form.pickup_address_code) && (
+                                <Field label="Pickup Location">
+                                    <div className="space-y-1.5">
+                                        {locationsFetched && pickupLocations.length > 0 ? (
+                                            <select
+                                                className="w-full px-3.5 py-2.5 text-sm rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer"
+                                                style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', color: '#1E293B' }}
+                                                value={form.pickup_address_code ?? ''}
+                                                onChange={e => handleSelectLocation(e.target.value)}
+                                            >
+                                                <option value="" disabled>Select a pickup location…</option>
+                                                {pickupLocations.map(loc => (
+                                                    <option key={loc.addressCode} value={loc.addressCode}>
+                                                        {loc.cityName} — {loc.address}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : form.pickup_address_code ? (
+                                            <div className="px-3.5 py-2.5 text-sm rounded-xl" style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', color: '#475569' }}>
+                                                <span className="font-medium" style={{ color: '#1E293B' }}>{form.pickup_address_label || form.pickup_address_code}</span>
+                                                <span className="ml-2 text-xs" style={{ color: '#94A3B8' }}>(saved)</span>
+                                            </div>
+                                        ) : null}
+                                        {/* Refresh link */}
+                                        {locationsFetched && (
+                                            <button
+                                                type="button"
+                                                onClick={fetchPickupLocations}
+                                                className="flex items-center gap-1 text-xs cursor-pointer transition-colors hover:opacity-80"
+                                                style={{ color: '#6366F1' }}
+                                            >
+                                                <RefreshCw size={11} />
+                                                Refresh locations
+                                            </button>
+                                        )}
+                                    </div>
+                                </Field>
+                            )}
+
+                            {/* Return address */}
                             <Field label="Return Address">
                                 <Input
                                     value={form.return_address}
